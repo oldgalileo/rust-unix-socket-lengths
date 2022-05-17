@@ -1,12 +1,14 @@
 #![doc(html_playground_url = "https://play.rust-lang.org/")]
 //! Navigating the path limits of UNIX domain sockets
 //!
-//! This was sparked by a cool tweet by Leonard Poettering's tweet[^tweet] about a cool workaround for
-//! AF_UNIX socket path lengths (_though they vary from system to system, the largest in the wild
-//! seems to be 108 chars [^linux], with BSD-derivatives using 104 chars, and more obscure systems
-//! running even smaller[^other sizes]
+//! This was sparked by Leonard Poettering's tweet[^tweet] about a cool workaround for AF_UNIX
+//! socket path lengths. Though they vary from system to system, the largest in the wild seems
+//! to be 108 chars [^linux], with BSD-derivatives using 104 chars, and more obscure systems
+//! running even smaller[^other sizes]. This can turn out to be a real issue[^problems] that can
+//! come up when working with XDG paths (e.g. `$XDG_RUNTIME_PATH` as mentioned by Leonard) or when
+//! dealing with hashes in paths.
 //!
-//! They lay out the two basic ideas:
+//! They lay out the two ways to resolve issues around this:
 //! - Leverage procfs as an alternative location for a file descriptor
 //! - Use temp files and rename _after_ the path has been used (checked is too gracious a term,
 //! given it's simply a hard-limit)
@@ -57,15 +59,11 @@
 //!
 //! ## Binding a socket
 //!
-//! To *bind* to a long path, you need to setup a symlinked directory to the parent directory of the
+//! To **bind** to a long path, we need to setup a symlinked directory to the parent directory of the
 //! socket at the end of the long path.
 //!
-//! > `/tmp/short-directory/ -> /var/run/obscenely/.../long/`
-//!
 //! Setup the [socket(2)](https://man7.org/linux/man-pages/man2/socket.2.html), then create the
-//! path that will serve as the dadress for the socket to be bound, to within the short directory:
-//!
-//! > `/tmp/short-directory/application.sock`
+//! path that will serve as the address for the socket to be bound, to within the short directory.
 //!
 //! [bind(2)](https://man7.org/linux/man-pages/man2/bind.2.html) will create the socket file at the
 //! path specified in our sockaddr_un[^linux]'s sun_path. Once we have this, we can rename the file
@@ -73,7 +71,6 @@
 //!
 //! > `/tmp/short-directory/application.sock -> /var/run/obscenely/.../long/application.sock`
 //!
-//! **Demo**:
 //! ```
 //! # use std::path::{PathBuf, Path};
 //! # use std::fs::rename;
@@ -163,10 +160,9 @@
 //!
 //! ## Connecting a socket
 //!
-//! To *connect* to a long path, it's much more straight-forward. We setup our
-//! [socket(2)](https://man7.org/linux/man-pages/man2/socket.2.html), then open the long path to
-//! the socket server socket using the O_PATH option. The _only_ catch is that Rust [currently
-//! does not allow for opening files with an all-false or empty access mode](https://rust-lang.github.io/rfcs/1252-open-options.html#no-access-mode-set)
+//! To **connect** to a long path, we setup our [socket(2)](https://man7.org/linux/man-pages/man2/socket.2.html)
+//! and then open the long path to the socket server socket using the O_PATH option. It's worth
+//! noting that Rust [does not allow for opening files with an all-false or empty access mode](https://rust-lang.github.io/rfcs/1252-open-options.html#no-access-mode-set)
 //!
 //! ```no_run,ignore
 //! use std::fs::file;
@@ -176,7 +172,7 @@
 //!     .custom_flags(libc::O_PATH)
 //!     .open(&long_socket_path)?;
 //!
-//! // This works!
+//! // This works
 //! let long_socket = File::options()
 //!     .read(true)
 //!     .custom_flags(libc::O_PATH)
@@ -188,15 +184,14 @@
 //! systems without issues. Under normal circumstances, this rule is sensible and hides a potential
 //! foot-gun._
 //!
-//! At this point, we use the fd from the `open(..., O_RDONLY | O_PATH)` to build the path to the
+//! We can use the fd from the `open(..., O_RDONLY | O_PATH)` to build the path to the
 //! procfs fd:
 //!
 //! > `/proc/self/fd/<fd>`
 //!
-//! Here, we assume that this path will be shorter than 108/SUN_PATH chars, which allows us to use
-//! it as the `sockaddr_un.`'s `sun_path` field. With that, we're able to construct a valid
-//! `sockaddr_un` and [connect(2)](https://man7.org/linux/man-pages/man2/connect.2.html) without
-//! any trouble.
+//! We assume that this path will be shorter than 108/SUN_PATH chars, which allows us to use it as
+//! the `sockaddr_un.`'s `sun_path` field. With that, we're able to construct a valid `sockaddr_un`
+//! and [connect(2)](https://man7.org/linux/man-pages/man2/connect.2.html) without any trouble.
 //!
 //! **Demo**:
 //! ```no_run
@@ -286,6 +281,8 @@
 //! [^linux]: Struct definition in the Linux kernel: <https://elixir.bootlin.com/linux/v5.17.8/source/include/uapi/linux/un.h#L9>  
 //!
 //! [^other sizes]: StackOverflow post discussing these sizes with great references: <https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars>  
+//!
+//! [^problems]: Podman ran into this and resolved the connect(2) issue: <https://github.com/containers/podman/issues/8798>
 use std::{
     mem,
     os::unix::{
@@ -315,7 +312,7 @@ fn main() {
     // to setup our own very-long-path bind
 
     // First we bind...
-    let bind_fd = bind_to_long_path(too_long_path, &sock_path);
+    let bind_fd = bind_to_long_path(&sock_path);
 
     // Then we sleep because I was too lazy to implement a proper RNG and so we could hit filename
     // collisions if we do this too fast...
@@ -331,24 +328,9 @@ fn main() {
     }
 }
 
-/// To *bind* to a long path, you need to setup a symlinked directory to the parent directory of the
-/// socket at the end of the long path.
-///
-/// > /tmp/short-directory/ -> /var/run/obscenely/.../long/
-///
-/// Setup the [socket(2)](https://man7.org/linux/man-pages/man2/socket.2.html), then create the
-/// path that will serve as the dadress for the socket to be bound, to within the short directory:
-///
-/// > /tmp/short-directory/application.sock
-///
-/// [bind(2)](https://man7.org/linux/man-pages/man2/bind.2.html) will create the socket file at the
-/// path specified in our sockaddr_un[^linux]'s sun_path. Once we have this, we can rename the file
-/// to our obscenely long directory:
-///
-/// > /tmp/short-directory/application.sock -> /var/run/obscenely/.../long/application.sock
-///
-/// Et-voila!
-fn bind_to_long_path<P: AsRef<Path>, Q: AsRef<Path>>(dest_sock_dir: P, dest_sock_path: Q) -> i32 {
+/// Bind an AF_UNIX stream socket to path which exceeds system sockaddr_un path limit
+fn bind_to_long_path<P: AsRef<Path>>(dest_sock_path: P) -> i32 {
+    let dest_sock_dir = dest_sock_path.as_ref().parent().unwrap();
     let symlink_base_name = generate_base_name();
     let symlink_base_path = std::path::PathBuf::from(format!("/tmp/{symlink_base_name}"));
     unix::fs::symlink(dest_sock_dir, &symlink_base_path)
@@ -390,40 +372,8 @@ fn bind_to_long_path<P: AsRef<Path>, Q: AsRef<Path>>(dest_sock_dir: P, dest_sock
     sock_fd
 }
 
-/// To *connect* to a long path, it's much more straight-forward. We setup our
-/// [socket(2)](https://man7.org/linux/man-pages/man2/socket.2.html), then open the long path to
-/// the socket server socket using the O_PATH option. The _only_ catch is that Rust [currently
-/// does not allow for opening files with an all-false or empty access mode](https://rust-lang.github.io/rfcs/1252-open-options.html#no-access-mode-set)
-///
-/// ```rust
-/// use std::fs::file;
-///
-/// // This will error with io::ErrorKind::InvalidInput
-/// let long_socket = File::options()
-///     .custom_flags(libc::O_PATH)
-///     .open(&long_socket_path)?;
-///
-/// // This works!
-/// let long_socket = File::options()
-///     .read(true)
-///     .custom_flags(libc::O_PATH)
-///     .open(&long_socket_path)?;
-/// ```
-///
-/// > This is only unintuitive because O_PATH is the only exception to the rule that a file most be
-/// opened with some access mode. You can call `libc::open(cstr, libc::O_PATH)` directory on UNIX
-/// systems without issues. Under normal circumstances, this rule is sensible and hides a potential
-/// foot-gun.
-///
-/// At this point, we use the fd from the `open(..., O_RDONLY | O_PATH)` to build the path to the
-/// procfs fd:
-///
-/// > `/proc/self/fd/<fd>`
-///
-/// Here, we assume that this path will be shorter than 108/SUN_PATH chars, which allows us to use
-/// it as the `sockaddr_un.`'s `sun_path` field. With that, we're able to construct a valid
-/// `sockaddr_un` and [connect(2)](https://man7.org/linux/man-pages/man2/connect.2.html) without
-/// any trouble.
+/// Connect to an AF_UNIX stream socket which is bound at a path longer than the system sockaddr_un
+/// path limit
 fn connect_to_long_path<P: AsRef<Path>>(dest_sock_path: P) -> (i32, i32) {
     let sock_fd = unsafe {
         let fd = libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0);
@@ -585,7 +535,7 @@ mod tests {
         let mut sock_path = too_long_path.clone();
         sock_path.push("application.sock");
 
-        let bind_fd = bind_to_long_path(&too_long_path, &sock_path);
+        let bind_fd = bind_to_long_path(&sock_path);
 
         unsafe {
             libc::close(bind_fd);
@@ -600,7 +550,7 @@ mod tests {
         let mut sock_path = too_long_path.clone();
         sock_path.push("application.sock");
 
-        let bind_fd = bind_to_long_path(&too_long_path, &sock_path);
+        let bind_fd = bind_to_long_path(&sock_path);
 
         thread::sleep(Duration::from_millis(50));
 
