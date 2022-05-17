@@ -1,0 +1,4 @@
+var searchIndex = JSON.parse('{\
+"rust_unix_socket_lengths":{"doc":"Navigating the path limits of UNIX domain sockets","t":[5,5,5,5,5,5,5,5],"n":["bind_to_long_path","connect_to_long_path","generate_base_name","main","prepare_too_long_path","sockaddr_un_from_path","sockaddr_un_path_max","sockaddr_un_path_offset"],"q":["rust_unix_socket_lengths","","","","","","",""],"d":["Bind an AF_UNIX stream socket to path which exceeds system …","","Generates a base-name in the format of …","","Creates a path that is longer than the system’s …","","Programmatically get the size of the sun_path sockaddr_un …",""],"i":[0,0,0,0,0,0,0,0],"f":[[[["asref",8,[["path",3]]]],["i32",0]],[[["asref",8,[["path",3]]]]],[[],["string",3]],[[]],[[["str",0]],["pathbuf",3]],[[["asref",8,[["path",3]]]]],[[],["usize",0]],[[],["usize",0]]],"p":[]}\
+}');
+if (window.initSearch) {window.initSearch(searchIndex)};
