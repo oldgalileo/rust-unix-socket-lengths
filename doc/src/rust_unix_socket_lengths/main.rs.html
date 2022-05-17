@@ -568,7 +568,9 @@
 <span id="563">563</span>
 <span id="564">564</span>
 <span id="565">565</span>
-</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">doc</span>(<span class="ident">html_playground_url</span> <span class="op">=</span> <span class="string">&quot;https://play.rust-lang.org/&quot;</span>)]</span>
+<span id="566">566</span>
+</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">crate_name</span> <span class="op">=</span> <span class="string">&quot;rust_unix_socket_lengths&quot;</span>]</span>
+<span class="attribute">#![<span class="ident">doc</span>(<span class="ident">html_playground_url</span> <span class="op">=</span> <span class="string">&quot;https://play.rust-lang.org/&quot;</span>)]</span>
 <span class="doccomment">//! Navigating the path limits of UNIX domain sockets</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! This was sparked by Leonard Poettering&#39;s tweet[^tweet] about a cool workaround for AF_UNIX</span>
@@ -942,8 +944,8 @@
     <span class="ident">sock_fd</span>
 }
 
-<span class="comment">// Connect to an AF_UNIX stream socket which is bound at a path longer than the system sockaddr_un</span>
-<span class="comment">// path limit</span>
+<span class="doccomment">/// Connect to an AF_UNIX stream socket which is bound at a path longer than the system sockaddr_un</span>
+<span class="doccomment">/// path limit</span>
 <span class="kw">fn</span> <span class="ident">connect_to_long_path</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="ident">dest_sock_path</span>: <span class="ident">P</span>) -&gt; (<span class="ident">i32</span>, <span class="ident">i32</span>) {
     <span class="kw">let</span> <span class="ident">sock_fd</span> <span class="op">=</span> <span class="kw">unsafe</span> {
         <span class="kw">let</span> <span class="ident">fd</span> <span class="op">=</span> <span class="ident">libc::socket</span>(<span class="ident">libc::AF_UNIX</span>, <span class="ident">libc::SOCK_STREAM</span>, <span class="number">0</span>);
