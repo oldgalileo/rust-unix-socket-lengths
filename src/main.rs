@@ -1,3 +1,4 @@
+#![crate_name = "rust_unix_socket_lengths"]
 #![doc(html_playground_url = "https://play.rust-lang.org/")]
 //! Navigating the path limits of UNIX domain sockets
 //!
