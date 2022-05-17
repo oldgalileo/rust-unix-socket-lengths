@@ -301,9 +301,10 @@ fn main() {
     let base_name = generate_base_name();
     let too_long_path = prepare_too_long_path(&base_name);
     println!(
-        "{} (len={})",
-        too_long_path.to_str().expect("weird fucked up path"),
-        too_long_path.as_os_str().len()
+        "path: {}\nlength: {}\nmaximum length:{}",
+        too_long_path.to_str().unwrap(),
+        too_long_path.as_os_str().len(),
+        sockaddr_un_path_max()
     );
     std::fs::create_dir_all(&too_long_path).expect("failed to recursively make very long path");
     let mut sock_path = too_long_path.clone();
@@ -314,7 +315,7 @@ fn main() {
     // to setup our own very-long-path bind
 
     // First we bind...
-    let bind_fd = bind_to_long_path(&too_long_path, &sock_path);
+    let bind_fd = bind_to_long_path(too_long_path, &sock_path);
 
     // Then we sleep because I was too lazy to implement a proper RNG and so we could hit filename
     // collisions if we do this too fast...
@@ -347,7 +348,6 @@ fn main() {
 /// > /tmp/short-directory/application.sock -> /var/run/obscenely/.../long/application.sock
 ///
 /// Et-voila!
-///
 fn bind_to_long_path<P: AsRef<Path>, Q: AsRef<Path>>(dest_sock_dir: P, dest_sock_path: Q) -> i32 {
     let symlink_base_name = generate_base_name();
     let symlink_base_path = std::path::PathBuf::from(format!("/tmp/{symlink_base_name}"));
@@ -446,7 +446,7 @@ fn connect_to_long_path<P: AsRef<Path>>(dest_sock_path: P) -> (i32, i32) {
 
     let procfs_sock_path = std::path::PathBuf::from(format!("/proc/self/fd/{dest_sock_fd}"));
     println!("found procfs path: {:?}", procfs_sock_path.to_str());
-    let (addr, len) = unsafe { sockaddr_un_from_path(&procfs_sock_path) };
+    let (addr, len) = unsafe { sockaddr_un_from_path(procfs_sock_path) };
 
     unsafe {
         let ret = libc::connect(sock_fd, &addr as *const _ as *const _, len);
